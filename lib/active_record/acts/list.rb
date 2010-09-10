@@ -65,7 +65,7 @@ module ActiveRecord
             def position_column
               '#{configuration[:column]}'
             end
-
+            
             #{scope_condition_method}
 
             before_destroy :decrement_positions_on_lower_items
@@ -88,7 +88,7 @@ module ActiveRecord
         def move_lower
           return unless lower_item
 
-          acts_as_list_class.transaction do
+          acts_as_list_class.serialized_transaction do
             lower_item.decrement_position
             increment_position
           end
@@ -98,7 +98,7 @@ module ActiveRecord
         def move_higher
           return unless higher_item
 
-          acts_as_list_class.transaction do
+          acts_as_list_class.serialized_transaction do
             higher_item.increment_position
             decrement_position
           end
@@ -108,7 +108,7 @@ module ActiveRecord
         # position adjusted accordingly.
         def move_to_bottom
           return unless in_list?
-          acts_as_list_class.transaction do
+          acts_as_list_class.serialized_transaction do
             decrement_positions_on_lower_items
             assume_bottom_position
           end
@@ -118,7 +118,7 @@ module ActiveRecord
         # position adjusted accordingly.
         def move_to_top
           return unless in_list?
-          acts_as_list_class.transaction do
+          acts_as_list_class.serialized_transaction do
             increment_positions_on_higher_items
             assume_top_position
           end
@@ -159,7 +159,7 @@ module ActiveRecord
         # Return the next higher item in the list.
         def higher_item
           return nil unless in_list?
-          acts_as_list_class.find(:first, :conditions =>
+          acts_as_list_class.find(:first, :select => columns_for_select, :conditions =>
             "#{scope_condition} AND #{position_column} = #{(send(position_column).to_i - 1).to_s}"
           )
         end
@@ -167,7 +167,7 @@ module ActiveRecord
         # Return the next lower item in the list.
         def lower_item
           return nil unless in_list?
-          acts_as_list_class.find(:first, :conditions =>
+          acts_as_list_class.find(:first, :select => columns_for_select, :conditions =>
             "#{scope_condition} AND #{position_column} = #{(send(position_column).to_i + 1).to_s}"
           )
         end
@@ -188,6 +188,11 @@ module ActiveRecord
 
           # Overwrite this method to define the scope of the list changes
           def scope_condition() "1" end
+          
+          # We don't need to return all columns when finding items for ordering.
+          def columns_for_select
+            "#{acts_as_list_class.primary_key}, #{position_column}"
+          end 
 
           # Returns the bottom position number in the list.
           #   bottom_position_in_list    # => 2
@@ -200,7 +205,7 @@ module ActiveRecord
           def bottom_item(except = nil)
             conditions = scope_condition
             conditions = "#{conditions} AND #{self.class.primary_key} != #{except.id}" if except
-            acts_as_list_class.find(:first, :conditions => conditions, :order => "#{position_column} DESC")
+            acts_as_list_class.find(:first, :conditions => conditions, :select => columns_for_select, :order => "#{position_column} DESC")
           end
 
           # Forces item to assume the bottom position in the list.
